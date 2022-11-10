@@ -55,78 +55,12 @@ To implement the demo we'll use:
 - [colorama](https://pypi.org/project/colorama/) module to highlight to prettify the outputs of the running threads making them more understandable.
 
 
-### Implementing the consumer
+### Consumer
 
 In the **consumer.py** there is the class **Consumer** that implements the message reader of the queue. The consumer read one message at a time and after the reading remove it.
 
-```
-import boto3
-from configparser import ConfigParser
-import messageSqs
-import warnings
-
-warnings.filterwarnings('ignore', category=FutureWarning, module='botocore.client')
-
-class Consumer:
-    def __init__(self, regionName, queueUrl,logger):
-        self.regionName = regionName
-        self.queueUrl = queueUrl
-        self.logger=logger
-
-    def receive_message(self,deleteAfterReceiveing):
-        sqs_client = boto3.client("sqs", region_name=self.regionName)
-        response = sqs_client.receive_message(
-            QueueUrl=self.queueUrl,
-            MaxNumberOfMessages=1,
-            WaitTimeSeconds=15,
-        )
-
-        messages=response.get("Messages", [])
-
-        self.logger(f"Number of messages received: {len(messages)}")
-        
-        if len(messages)==0:
-            return False
-
-        for message in messages:
-            m=messageSqs.MessageSqs(jsonStr=message["Body"])
-            self.logger(f"\tMessage read from queue: Data:{m.data}\tTime Stamp:{m.ts}\t Id:{m.id}")
-            if deleteAfterReceiveing:
-                receipt_handle = message['ReceiptHandle']
-                dlt_response=sqs_client.delete_message(QueueUrl=self.queueUrl,ReceiptHandle=receipt_handle)
-                if dlt_response['ResponseMetadata']['HTTPStatusCode']==200:
-                    self.logger("\tMessage deleted from queue.")
-        return True
-```
-
-### Implementing the producer
+### Producer
 In the **producer.py** there is the Producer class that implements the message sender of the queue. The producer create one message at a time and then send it to the queue.
-```
-import boto3
-import uuid
-from messageSqs import MessageSqsJSONEncoder
-import warnings
-
-warnings.filterwarnings('ignore', category=FutureWarning, module='botocore.client')
-
-class Producer:
-    
-    def __init__(self,regionName,queueUrl,logger):
-        self.regionName = regionName
-        self.queueUrl= queueUrl
-        self.logger=logger
-
-    def send_message(self,message):
-        sqs_client = boto3.client("sqs", self.regionName)
-        self.logger(f"Sending message with id {message.id}...")        
-        response = sqs_client.send_message(
-            QueueUrl=self.queueUrl,
-            MessageBody=MessageSqsJSONEncoder().encode(message),
-            MessageGroupId="test",
-            MessageDeduplicationId=f"DeduplicationId-{uuid.uuid4()}"
-        )
-        self.logger(f"SQS Response: Status:{response['ResponseMetadata']['HTTPStatusCode']}\tSQS Message Id:{response['MessageId']}")        
-```
 
 ### Implementing the scenario
 In the module **sqs-demo.py** we run in different concurrent threads the producer and consumer where the producer send a message each half second and the consumer try to read a message each half second.
